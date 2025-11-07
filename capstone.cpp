@@ -166,8 +166,9 @@ void DisplayAllPixelData_with_mV(void)
             float voltage_mV = ADC_to_mV(adc_raw);
 
             // Transmit (ASCII format untuk debugging)
-            sprintf(msg, "Pixel[%4d]:  %4u   ->  %.2f mV\r\n", px, adc_raw, voltage_mV);
+            sprintf(msg, "Pixel[%4d]: %.2f mV\r\n", px, adc_raw, voltage_mV);
             HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+            HAL_Delay(1);
         }
 
     }
@@ -218,7 +219,7 @@ int main(void)
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1); //PA0 - ICG
   __HAL_TIM_SET_COUNTER(&htim2, 66); //600 ns delay
   HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_3); //PA2 - SH
-  __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_11);
+  __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_15);
 
   CCD_Flush(2);
   sprintf(msg, "\r\n=== System Ready ===\r\n");
@@ -615,10 +616,10 @@ static void MX_TIM5_Init(void)
 
   /* USER CODE END TIM5_Init 0 */
 
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_SlaveConfigTypeDef sSlaveConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
+	  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+	  TIM_SlaveConfigTypeDef sSlaveConfig = {0};
+	  TIM_MasterConfigTypeDef sMasterConfig = {0};
+	  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM5_Init 1 */
 
@@ -643,11 +644,11 @@ static void MX_TIM5_Init(void)
     Error_Handler();
   }
   sSlaveConfig.SlaveMode = TIM_SLAVEMODE_TRIGGER;
-  sSlaveConfig.InputTrigger = TIM_TS_ITR0;
-  if (HAL_TIM_SlaveConfigSynchro(&htim5, &sSlaveConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
+   sSlaveConfig.InputTrigger = TIM_TS_ITR0;
+   if (HAL_TIM_SlaveConfigSynchro(&htim5, &sSlaveConfig) != HAL_OK)
+   {
+     Error_Handler();
+   }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
@@ -735,10 +736,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
-  /*Configure GPIO pin : PA11 */
-  GPIO_InitStruct.Pin = GPIO_PIN_11;
+  /*Configure GPIO pin : PA15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_15;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
@@ -761,7 +762,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 }
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-    if(GPIO_Pin == GPIO_PIN_11)
+    if(GPIO_Pin == GPIO_PIN_15)
     {
         // Debouncing sederhana
         static uint32_t lastPressTime = 0;
@@ -769,7 +770,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         if(currentTime - lastPressTime > 500)  // ✅ 500ms debounce
         {
             // Pastikan pin benar-benar HIGH (bukan noise)
-            if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_11) == GPIO_PIN_SET)
+            if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_15) == GPIO_PIN_SET)
             {
                 if(!scanInProgress)  // Cek status
                 {
