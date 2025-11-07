@@ -102,12 +102,13 @@ void CCD_Flush(uint8_t flushCycles)
 
         // Stop dulu
         HAL_ADC_Stop_DMA(&hadc1);
-        HAL_Delay(5);
+        HAL_Delay(10);
 
         // Reset counter TIM2 untuk sinkronisasi
         __HAL_TIM_SET_COUNTER(&htim2, 66);
-
+        HAL_Delay(1);
         // Start ADC DMA
+        memset((uint16_t*)CCDBuffer, 0, sizeof(CCDBuffer));
         HAL_ADC_Start_DMA(&hadc1, (uint32_t*)CCDBuffer, TOTAL_SAMPLES);
 
         // ✅ PENTING: Pastikan TIM2 (ICG) dan TIM5 (SH) tetap running!
@@ -140,16 +141,19 @@ void DisplayAllPixelData_with_mV(void)
 {
     sprintf(msg, "\r\n========== CCD Data (6 Sensors × %d Pixels) ==========\r\n",
             PIXELS_PER_SENSOR);
-    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10);
+    HAL_Delay(1);
 
     sprintf(msg, "Pixel[index]:  Voltage_mV\r\n");
-    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10);
+    HAL_Delay(1);
 
     // Loop untuk setiap sensor
     for(uint8_t sensor = 0; sensor < NUM_SENSORS; sensor++)
     {
         sprintf(msg, "\r\n--- SENSOR %d ---\r\n", sensor + 1);
-        HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+        HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10);
+        HAL_Delay(1);
 
         // Tampilkan setiap N pixel (sampling untuk display)
         uint16_t display_interval = 20;
@@ -167,13 +171,14 @@ void DisplayAllPixelData_with_mV(void)
 
             // Transmit (ASCII format untuk debugging)
             sprintf(msg, "Pixel[%4d]: %.2f mV\r\n", px, adc_raw, voltage_mV);
-            HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+            HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10);
             HAL_Delay(1);
         }
 
     }
     sprintf(msg, "\r\n========== END OF FRAME ==========\r\n");
-    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10);
+    HAL_Delay(1);
 }
 /* USER CODE END 0 */
 
@@ -214,18 +219,24 @@ int main(void)
   MX_ADC1_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1); //PA6 - fM
-  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4); //ADC
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1); //PA0 - ICG
-  __HAL_TIM_SET_COUNTER(&htim2, 66); //600 ns delay
-  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_3); //PA2 - SH
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1); // fM
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4); // ADC
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1); // ICG
+  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_3); // SH
+
+  HAL_Delay(2); // beri waktu semua timer running
+
+  __HAL_TIM_SET_COUNTER(&htim2, 66);  // sinkronisasi ulang
+  __HAL_TIM_SET_COUNTER(&htim5, 0);
   __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_15);
 
   CCD_Flush(2);
   sprintf(msg, "\r\n=== System Ready ===\r\n");
-  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10);
+  HAL_Delay(1);
   sprintf(msg, "Press the button to start scanning...\r\n\r\n");
-  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10);
+  HAL_Delay(1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -241,14 +252,24 @@ int main(void)
 	        sprintf(msg, "\r\n[%lu] Starting CCD acquisition...\r\n", HAL_GetTick());
 	        HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 100);
 
+	        // Nonaktifkan interrupt UART sementara supaya DMA ADC tidak terganggu
+	        __HAL_UART_DISABLE_IT(&huart1, UART_IT_TXE);
+	        __HAL_UART_DISABLE_IT(&huart1, UART_IT_TC);
+
 	        // Mulai akuisisi
 	        acquisitionComplete = 0;
 	        isFlushMode = 0;
+	        memset((uint16_t*)CCDBuffer, 0, sizeof(CCDBuffer));
 	        HAL_ADC_Start_DMA(&hadc1, (uint32_t*)CCDBuffer, TOTAL_SAMPLES);
 
 	        // Tunggu DMA selesai
 	        uint32_t timeout = HAL_GetTick() + 3000;
 	        while(!acquisitionComplete && HAL_GetTick() < timeout);
+
+
+	        // Aktifkan kembali interrupt UART setelah akuisisi selesai
+	        __HAL_UART_ENABLE_IT(&huart1, UART_IT_TXE);
+	        __HAL_UART_ENABLE_IT(&huart1, UART_IT_TC);
 
 	        HAL_ADC_Stop_DMA(&hadc1);
 
